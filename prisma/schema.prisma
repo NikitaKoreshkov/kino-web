@@ -1,0 +1,60 @@
+// Prisma schema for PostgreSQL
+// Run: npx prisma generate && npx prisma migrate dev
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  role         Role     @default(ADMIN)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Booking {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  firstName String
+  lastName  String
+  phone     String
+
+  // upi | cinema | master
+  show   String
+  // card | cash (как сейчас в форме)
+  pay    String
+
+  // выбранные билеты и допы в исходном виде
+  tickets Json
+  extras  Json
+
+  // зафиксируем язык интерфейса и сумму на момент заявки
+  lang    String   @default("ru")
+  total   Int      @default(0)
+
+  status  String   @default("NEW")
+
+  @@index([createdAt])
+  @@index([show])
+}
+
+enum Role {
+  ADMIN
+}
+
+/// Key-value settings storage for site content
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
