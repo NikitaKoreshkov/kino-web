@@ -125,7 +125,7 @@ export default function AdminSiteEditor() {
     setData((d) => ({ ...d, [key]: value }));
   }
 
-  const home_panels_items = get<any[]>("home.panels.items", Array(6).fill(null).map(() => ({ image: "", title: "" })));
+  const home_panels_items = get<any[]>("home.panels.items", Array(6).fill(null).map(() => ({ image: "", title: "", description: "" })));
   const home_events = get<any[]>("home.events", Array(3).fill(null).map(() => ({ image: "", title: "", description: "" })));
   const home_carousel = get<any[]>("home.carousel", []);
   const home_map = get<any[]>("home.map", Array(3).fill(null).map(() => ({ image: "", showTitle: "", price: "", description: "" })));
@@ -195,7 +195,9 @@ export default function AdminSiteEditor() {
                 <div className="text-sm font-medium">Карточка {i+1}</div>
                 <ImageInput label="Изображение" value={it.image} onChange={(u)=>{ const arr=[...home_panels_items]; arr[i]={...arr[i], image:u}; set("home.panels.items", arr); }} />
                 <input className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm" placeholder="Заголовок" value={it.title} onChange={(e)=>{ const arr=[...home_panels_items]; arr[i]={...arr[i], title:e.target.value}; set("home.panels.items", arr); }} />
+                <textarea className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm" placeholder="Описание" value={it.description||""} onChange={(e)=>{ const arr=[...home_panels_items]; arr[i]={...arr[i], description:e.target.value}; set("home.panels.items", arr); }} />
                 <input className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm" placeholder="Заголовок (EN)" value={it.title_en||""} onChange={(e)=>{ const arr=[...home_panels_items]; arr[i]={...arr[i], title_en:e.target.value}; set("home.panels.items", arr); }} />
+                <textarea className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm" placeholder="Description (EN)" value={it.description_en||""} onChange={(e)=>{ const arr=[...home_panels_items]; arr[i]={...arr[i], description_en:e.target.value}; set("home.panels.items", arr); }} />
               </div>
             ))}
           </div>

@@ -1,88 +1,43 @@
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import type { Lang } from "@/app/lang";
 import AboutClient from "./about.client";
-import { getSettingsMap, read } from "@/lib/settings";
+import JsonLd from "@/app/_components/JsonLd";
+import {
+  getAboutExtras,
+  getAboutIntroImage,
+  getAboutShowBlocks,
+} from "@/lib/aboutContent";
+import { breadcrumbJsonLd, buildPageMetadata } from "@/lib/seo";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "О ШоуСочи — амфитеатр на Южном взморье",
+  description:
+    "Узнайте о ШоуСочи: три ежедневные программы, атмосфера амфитеатра на Южном взморье, удобная парковка. Сочи, ул. Калинина, 1/1.",
+  path: "/about",
+  keywords: ["о ШоуСочи", "амфитеатр Сочи", "Южное взморье развлечения"],
+});
 
 export default async function Page() {
   const cookieStore = await cookies();
-  const lang = (cookieStore.get("lang")?.value as Lang) || ("ru" as Lang);
-  // Read intro image from settings: about.intro.image (or about.intro.src)
-  let introImage: string | undefined = undefined;
-  let blocks: any = undefined;
-  let extras: any = undefined;
-  try {
-    const settings = await getSettingsMap();
-    const intro = read<any>(settings, "about.intro", { image: "" });
-    const img = typeof intro === 'string' ? intro : (intro?.image || intro?.src || "");
-    if (typeof img === 'string' && img.trim()) introImage = img.trim();
-    // Read about blocks (upi, cinema, master)
-    const rawBlocks = read<any[]>(settings, 'about.blocks', []);
-    if (Array.isArray(rawBlocks) && rawBlocks.length) {
-      const byKey: any = {};
-      rawBlocks.forEach((b: any) => {
-        const key = (b?.key || '').toString();
-        if (!key) return;
-        const title = lang === 'en' ? (b?.title_en || b?.title) : b?.title;
-        const description = lang === 'en' ? (b?.description_en || b?.description) : b?.description;
-        byKey[key] = {
-          cover: (b?.cover || '').toString(),
-          title: (title || '').toString(),
-          description: (description || '').toString(),
-          prices: Array.isArray(b?.prices) ? b.prices.map((p: any) => {
-            const label = lang === 'en' ? (p?.label_en || p?.label) : p?.label;
-            const note = lang === 'en' ? (p?.note_en || p?.note) : p?.note;
-            const price = lang === 'en' ? (p?.price_en || p?.price) : p?.price;
-            return {
-              label: (label || '').toString(),
-              price: (price || '').toString(),
-              note: (note || '').toString(),
-              ticket: (p?.ticket || '').toString(),
-            };
-          }) : [],
-          panels: Array.isArray(b?.panels) ? b.panels.map((p: any) => {
-            const pt = lang === 'en' ? (p?.title_en || p?.title) : p?.title;
-            const pd = lang === 'en' ? (p?.description_en || p?.description) : p?.description;
-            return {
-              title: (pt || '').toString(),
-              description: (pd || '').toString(),
-            };
-          }) : [],
-        };
-      });
-      blocks = byKey;
-    }
-    // Read extras (about.addons)
-    const rawExtras = read<any>(settings, 'about.addons', {});
-    if (rawExtras && typeof rawExtras === 'object') {
-      const title = lang === 'en' ? (rawExtras?.title_en || rawExtras?.title) : rawExtras?.title;
-      const lead = lang === 'en' ? (rawExtras?.lead_en || rawExtras?.lead) : rawExtras?.lead;
-      extras = {
-        title: (title || '').toString(),
-        lead: (lead || '').toString(),
-        groups: {
-          photos: (lang === 'en' ? (rawExtras?.groups?.photos_en || rawExtras?.groups?.photos) : rawExtras?.groups?.photos || '').toString(),
-          ice: (lang === 'en' ? (rawExtras?.groups?.ice_en || rawExtras?.groups?.ice) : rawExtras?.groups?.ice || '').toString(),
-          congrats: (lang === 'en' ? (rawExtras?.groups?.congrats_en || rawExtras?.groups?.congrats) : rawExtras?.groups?.congrats || '').toString(),
-        },
-        items: {
-          photos: Array.isArray(rawExtras?.items?.photos) ? rawExtras.items.photos.map((it: any) => ({
-            title: (lang === 'en' ? (it?.title_en || it?.title) : it?.title || '').toString(),
-            subtitle: (lang === 'en' ? (it?.subtitle_en || it?.subtitle) : it?.subtitle || '').toString(),
-            price: (lang === 'en' ? (it?.price_en || it?.price) : it?.price || '').toString(),
-          })) : [],
-          ice: Array.isArray(rawExtras?.items?.ice) ? rawExtras.items.ice.map((it: any) => ({
-            title: (lang === 'en' ? (it?.title_en || it?.title) : it?.title || '').toString(),
-            subtitle: (lang === 'en' ? (it?.subtitle_en || it?.subtitle) : it?.subtitle || '').toString(),
-            price: (lang === 'en' ? (it?.price_en || it?.price) : it?.price || '').toString(),
-          })) : [],
-          congrats: Array.isArray(rawExtras?.items?.congrats) ? rawExtras.items.congrats.map((it: any) => ({
-            title: (lang === 'en' ? (it?.title_en || it?.title) : it?.title || '').toString(),
-            subtitle: (lang === 'en' ? (it?.subtitle_en || it?.subtitle) : it?.subtitle || '').toString(),
-            price: (lang === 'en' ? (it?.price_en || it?.price) : it?.price || '').toString(),
-          })) : [],
-        },
-      };
-    }
-  } catch {}
-  return <AboutClient initialLang={lang} introImage={introImage} blocks={blocks} extras={extras} />;
+  const lang = ((cookieStore.get("lang")?.value as Lang) || "ru") as Lang;
+  const introImage = await getAboutIntroImage();
+  const blocks = await getAboutShowBlocks(lang);
+  const extras = await getAboutExtras(lang);
+  return (
+    <>
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: "Главная", path: "/" },
+          { name: "О нас", path: "/about" },
+        ])}
+      />
+      <AboutClient
+        initialLang={lang}
+        introImage={introImage}
+        blocks={blocks}
+        extras={extras}
+      />
+    </>
+  );
 }

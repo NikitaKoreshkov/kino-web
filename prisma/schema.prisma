@@ -31,8 +31,8 @@ model Booking {
 
   // upi | cinema | master
   show   String
-  // card | cash (как сейчас в форме)
-  pay    String
+  // legacy field; bookings now go via WhatsApp
+  pay    String @default("whatsapp")
 
   // выбранные билеты и допы в исходном виде
   tickets Json

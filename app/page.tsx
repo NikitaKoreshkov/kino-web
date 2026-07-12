@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Header from "@/app/(public)/_components/Header.ssr";
 import VideoHero from "@/app/(public)/_components/VideoHero.ssr";
 import AtmosphereIntro from "@/app/(public)/_components/AtmosphereIntro.ssr";
@@ -8,41 +9,40 @@ import CenterSwipeGallery from "@/app/(public)/_components/CenterSwipeGallery";
 import TestimonialsMarquee from "@/app/(public)/_components/TestimonialsMarquee.ssr";
 import Footer from "@/app/(public)/_components/Footer.ssr";
 import MapPrograms from "@/app/(public)/_components/MapPrograms.ssr";
-// Demo sections removed
-
+import JsonLd from "@/app/_components/JsonLd";
 import { getSettingsMap, read } from "@/lib/settings";
+import { normalizeMediaList } from "@/lib/media";
+import {
+  DEFAULT_DESCRIPTION_RU,
+  breadcrumbJsonLd,
+  buildPageMetadata,
+} from "@/lib/seo";
 
-export const revalidate = 60; // Enable ISR: re-generate at most once per 60s
+export const revalidate = 60;
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "ШоуСочи — пенное шоу, кино и мастер-классы в Сочи",
+  description: DEFAULT_DESCRIPTION_RU,
+  path: "/",
+  keywords: [
+    "пенное шоу Сочи",
+    "кино под звёздами",
+    "амфитеатр Южное взморье",
+    "купить билеты ШоуСочи",
+  ],
+});
 
 export default async function Home() {
-  // Load settings for dynamic content
-  let carousel: { src: string; alt?: string }[] = [
-    { src: "/images/cinema.svg", alt: "" },
-    { src: "/file.svg", alt: "" },
-    { src: "/globe.svg", alt: "" },
-    { src: "/next.svg", alt: "" },
-    { src: "/window.svg", alt: "" },
-  ];
+  let carousel: { src: string; alt?: string }[] = [];
   try {
     const settings = await getSettingsMap();
-    const arr = read<any[]>(settings, "home.carousel", []);
-    if (Array.isArray(arr) && arr.length) {
-      const normalized = arr
-        .map((x) => {
-          if (typeof x === 'string') return { src: x, alt: '' } as { src: string; alt: string };
-          if (x && typeof x === 'object') {
-            const src = (x.src || x.image || '').toString();
-            const alt = (x.alt || '').toString();
-            return { src, alt } as { src: string; alt: string };
-          }
-          return null as { src: string; alt: string } | null;
-        })
-        .filter((x): x is { src: string; alt: string } => !!x && typeof x.src === 'string' && x.src.trim().length > 0);
-      if (normalized.length) carousel = normalized;
-    }
+    carousel = normalizeMediaList(read(settings, "home.carousel", []));
   } catch {}
   return (
     <main>
+      <JsonLd
+        data={breadcrumbJsonLd([{ name: "Главная", path: "/" }])}
+      />
       <Header />
       <VideoHero />
       <AtmosphereIntro />
@@ -50,7 +50,16 @@ export default async function Home() {
       <Events />
       <EventsInvite />
       <div className="cSwipeMobile">
-        <CenterSwipeGallery images={carousel} width={520} height={400} gap={18} />
+        <CenterSwipeGallery
+          images={
+            carousel.length
+              ? carousel
+              : Array.from({ length: 3 }, () => ({ src: "", alt: "" }))
+          }
+          width={520}
+          height={400}
+          gap={18}
+        />
       </div>
       <MapPrograms />
       <TestimonialsMarquee />

@@ -6,8 +6,9 @@ import { getSettingsMap, read } from "@/lib/settings";
 // Ticket price maps must match client IDs
 const TICKETS_MAP: Record<string, { id: string; price: number }[]> = {
   upi: [
-    { id: "upi_child_combo", price: 1850 },
-    { id: "upi_adult", price: 700 },
+    { id: "upi_adult", price: 1500 },
+    { id: "upi_adult_pair", price: 1500 },
+    { id: "upi_child_combo", price: 1500 }, // legacy
   ],
   cinema: [
     { id: "cinema_child", price: 400 },
@@ -21,8 +22,9 @@ const TICKETS_MAP: Record<string, { id: string; price: number }[]> = {
 };
 
 const USD_TICKET_PRICES: Record<string, number> = {
-  upi_child_combo: 21,
-  upi_adult: 8,
+  upi_adult: 15,
+  upi_adult_pair: 15,
+  upi_child_combo: 15,
   cinema_child: 4,
   cinema_adult: 6,
   master_combo: 10,
@@ -70,11 +72,11 @@ async function calcTotal(show: string, tickets: Record<string, number>, lang: "r
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { firstName, lastName, phone, show, pay } = body || {};
+    const { firstName, lastName, phone, show } = body || {};
     const tickets = (body?.tickets && typeof body.tickets === 'object') ? body.tickets : {};
     const extras = (body?.extras && typeof body.extras === 'object') ? body.extras : {};
 
-    if (!firstName || !lastName || !phone || !show || !pay) {
+    if (!firstName || !lastName || !phone || !show) {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
@@ -89,7 +91,7 @@ export async function POST(req: Request) {
         lastName: String(lastName),
         phone: String(phone),
         show: String(show),
-        pay: String(pay),
+        pay: "whatsapp",
         tickets,
         extras,
         lang,

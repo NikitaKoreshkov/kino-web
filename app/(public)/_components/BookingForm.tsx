@@ -2,20 +2,22 @@
 
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useLang } from "@/app/lang";
+import GlassPanelShell from "./GlassPanelShell";
+import { openBookingWhatsApp } from "@/lib/bookingWhatsApp";
 
 const SHOWS = [
-  { id: "master", ru: "Мастер-класс", en: "Master class" },
-  { id: "upi", ru: "Фестиваль ЮПИ шоу", en: "UPI Festival show" },
-  { id: "cinema", ru: "Кино и Шоу", en: "Cinema & Show" },
+  { id: "master", ru: "Кулинарный мастер-класс", en: "Culinary master class" },
+  { id: "upi", ru: "Семейное пенное шоу", en: "Family foam show" },
+  { id: "cinema", ru: "Кино и шоу под звёздами", en: "Cinema & show under the stars" },
 ];
 
 type TicketDef = { id: string; ru: string; en: string; price: number };
 // Time slots (universal)
 const TIME_SLOTS = [
   { id: "10-12", ru: "10:00 – 12:00", en: "10:00 – 12:00" },
-  { id: "17-19", ru: "17:00 – 19:00", en: "17:00 – 19:00" },
+  { id: "17-19", ru: "17:00 – 18:30", en: "17:00 – 18:30" },
   { id: "20-02", ru: "20:00 – 02:00", en: "20:00 – 02:00" },
 ] as const;
 // Mapping show -> allowed time slot id
@@ -30,8 +32,9 @@ const TIME_BY_SHOW = {
 // USD prices for tickets (used when lang === 'en')
 const USD_TICKET_PRICES: Record<string, number> = {
   // UPI
-  upi_child_combo: 21,
-  upi_adult: 8,
+  upi_adult: 15,
+  upi_adult_pair: 15,
+  upi_child_combo: 15, // legacy id
   // Cinema
   cinema_child: 4,
   cinema_adult: 6,
@@ -45,8 +48,8 @@ type ExtraDef = { id: string; ru: string; en: string; price: number };
 // Pricing per show
 const TICKETS_MAP: Record<string, TicketDef[]> = {
   upi: [
-    { id: "upi_child_combo", ru: "Детский (1 ребенок + 1 родитель)", en: "Child (1 kid + 1 parent)", price: 1850 },
-    { id: "upi_adult", ru: "Взрослый", en: "Adult", price: 700 },
+    { id: "upi_adult", ru: "Взрослый билет", en: "Adult ticket", price: 1500 },
+    { id: "upi_adult_pair", ru: "2 взрослых (2‑й родитель в подарок)", en: "2 adults (2nd parent free)", price: 1500 },
   ],
   cinema: [
     { id: "cinema_child", ru: "Детский", en: "Child", price: 400 },
@@ -84,7 +87,6 @@ export default function BookingForm({ variant = "dark", initialLang, showTitles,
     return lang === 'ru' ? def.ru : def.en;
   }, [showTitles, lang]);
   const sp = useSearchParams();
-  const router = useRouter();
   const initialShow = sp.get("show");
   const initialTicket = sp.get("ticket");
   const isPorsche = variant === "porsche";
@@ -95,10 +97,8 @@ export default function BookingForm({ variant = "dark", initialLang, showTitles,
   const [firstNameError, setFirstNameError] = useState<string>("");
   const [lastNameError, setLastNameError] = useState<string>("");
   const [show, setShow] = useState<string>("");
-  const [pay, setPay] = useState<string>("");
   const [timeSlot, setTimeSlot] = useState<string>("");
   const [showTouched, setShowTouched] = useState<boolean>(false);
-  const [payTouched, setPayTouched] = useState<boolean>(false);
   const [agreed, setAgreed] = useState<boolean>(true);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
@@ -196,7 +196,6 @@ export default function BookingForm({ variant = "dark", initialLang, showTitles,
     
     // Set default values first
     let initialShow = isPorsche ? "" : SHOWS[0].id;
-    let initialPay = isPorsche ? "" : "card";
     let initialTickets = {};
     let initialExtras = {};
     let initialFirstName = "";
@@ -237,11 +236,6 @@ export default function BookingForm({ variant = "dark", initialLang, showTitles,
           }
         }
         
-        // Only use saved pay if it's valid
-        if (saved.pay && (saved.pay === 'card' || saved.pay === 'cash')) {
-          initialPay = saved.pay;
-        }
-        
         // Always use saved personal info if available
         if (saved.firstName) initialFirstName = saved.firstName;
         if (saved.lastName) initialLastName = saved.lastName;
@@ -263,7 +257,6 @@ export default function BookingForm({ variant = "dark", initialLang, showTitles,
     
     // Apply initial state
     setShow(initialShow);
-    setPay(initialPay);
     setTickets(initialTickets);
     setExtras(initialExtras);
     setFirstName(initialFirstName);
@@ -292,7 +285,6 @@ export default function BookingForm({ variant = "dark", initialLang, showTitles,
           lastName,
           phone,
           show,
-          pay,
           timeSlot,
           // Don't overwrite tickets and extras here as they're handled separately
           tickets: currentData.tickets || {},
@@ -305,7 +297,7 @@ export default function BookingForm({ variant = "dark", initialLang, showTitles,
     };
     
     updateData();
-  }, [firstName, lastName, phone, pay, timeSlot, isInitialized]);
+  }, [firstName, lastName, phone, timeSlot, isInitialized]);
 
   // Persist on show change and optionally auto-select first ticket if needed
   useEffect(() => {
@@ -465,7 +457,6 @@ export default function BookingForm({ variant = "dark", initialLang, showTitles,
 
   // simple custom dropdown (for Porsche) to avoid native select UI
   const [showOpen, setShowOpen] = useState(false);
-  const [payOpen, setPayOpen] = useState(false);
   const [ticketsOpen, setTicketsOpen] = useState(false);
   const [extrasOpen, setExtrasOpen] = useState(false);
   // (timeOpen used for removed weekday dropdown)
@@ -482,7 +473,6 @@ export default function BookingForm({ variant = "dark", initialLang, showTitles,
       // close when clicking outside any of our dropdowns
       if (!target.closest('.p-field')) {
         setShowOpen(false);
-        setPayOpen(false);
         setTicketsOpen(false);
         setExtrasOpen(false);
         // (removed: timeOpen toggle for weekday dropdown)
@@ -493,70 +483,6 @@ export default function BookingForm({ variant = "dark", initialLang, showTitles,
   }, []);
 
   const [submitting, setSubmitting] = useState(false);
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // Валидация имён
-    const fOk = validateName(firstName);
-    const lOk = validateName(lastName);
-    setFirstNameError(fOk ? "" : t("Укажите корректное имя (2–40 букв)", "Enter a valid first name (2–40 letters)"));
-    setLastNameError(lOk ? "" : t("Укажите корректную фамилию (2–40 букв)", "Enter a valid last name (2–40 letters)"));
-    // Телефон уже валидируем в onChange, но проверим ещё раз
-    const phoneOk = phoneError === "" && phone.trim().length > 0;
-    // Выборы
-    const showOk = !!show;
-    const payOk = !!pay;
-    const timeOk = !!timeSlot;
-
-    if (!fOk || !lOk || !phoneOk || !showOk || !payOk || !timeOk) {
-      return; // не уходим дальше
-    }
-
-    // Кладём данные в localStorage (для чек-аута) и отправляем на сервер
-    const payload = { firstName, lastName, phone, show, pay, timeSlot, tickets, extras };
-    try {
-      if (typeof window !== 'undefined') localStorage.setItem("bookingData", JSON.stringify(payload));
-    } catch {}
-
-    setSubmitting(true);
-    try {
-      const res = await fetch('/api/booking/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error('Failed to save booking');
-      const data = await res.json();
-      try {
-        const current = JSON.parse(localStorage.getItem('bookingData') || '{}');
-        localStorage.setItem('bookingData', JSON.stringify({ ...current, bookingId: data.id, total: data.total }));
-      } catch {}
-      router.push(`/booking/checkout?id=${encodeURIComponent(data.id)}`);
-    } catch (err) {
-      console.error(err);
-      // Если API недоступен, продолжим без id
-      router.push('/booking/checkout');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const inputBase = isPorsche
-    ? "w-full h-12 px-4 rounded-md placeholder-transparent border-2 focus:outline-none focus:ring-0 transition-colors p-input"
-    : "w-full h-12 px-4 rounded-xl bg-white/10 dark:bg-white/5 text-white/90 placeholder-white/40 border border-white/15 focus:outline-none focus:ring-2 focus:ring-indigo-400/60 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]";
-  const labelText = isPorsche ? "hidden" : "mb-2 block text-sm font-medium text-white/80";
-  const sectionTitle = isPorsche ? "hidden" : "mb-2 block text-sm font-medium text-white/80";
-  const radioButtonWrap = isPorsche
-    ? (active: boolean) => `group relative rounded-md border px-4 py-3 text-left transition-all ${active ? "border-black" : "border-gray-300 hover:border-black"}`
-    : (active: boolean) => `group relative rounded-2xl border px-4 py-3 text-left transition-all backdrop-blur-md ${active ? "border-indigo-400/60 bg-indigo-400/10 shadow-[0_0_0_1px_rgba(99,102,241,0.35),0_8px_30px_rgba(80,90,255,0.25)]" : "border-white/12 bg-white/6 hover:border-white/25"} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent`;
-  const payOptionWrap = isPorsche
-    ? (active: boolean) => `flex items-center gap-3 rounded-md border px-4 py-3 cursor-pointer transition-all ${active ? "border-black" : "border-gray-300 hover:border-black"}`
-    : (active: boolean) => `flex items-center gap-3 rounded-2xl border px-4 py-3 cursor-pointer transition-all backdrop-blur-md ${active ? "border-indigo-400/60 bg-indigo-400/10 shadow-[0_0_0_1px_rgba(99,102,241,0.35),0_8px_30px_rgba(80,90,255,0.25)]" : "border-white/12 bg-white/6 hover:border-white/25"} focus-within:ring-2 focus-within:ring-indigo-400/70 focus-within:ring-offset-2`;
-  const textMain = isPorsche ? "text-black dark:text-white" : "text-white/90";
-  const textSub = isPorsche ? "text-[12px] text-black/60" : "text-[12px] text-white/60";
-  const submitBtn = isPorsche
-    ? "relative inline-flex items-center justify-center h-12 w-full px-6 rounded-md font-semibold disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none p-submit"
-    : "relative inline-flex items-center justify-center h-12 px-8 rounded-2xl text-white font-semibold disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none ctaPremium focus-visible:ring-2 focus-visible:ring-indigo-300/80 focus-visible:ring-offset-2";
 
   // (duplicate broken saveBookingData block removed)
   
@@ -600,6 +526,84 @@ export default function BookingForm({ variant = "dark", initialLang, showTitles,
     }
     return new Intl.NumberFormat('ru-RU').format(n) + ' ₽';
   }, [lang]);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const fOk = validateName(firstName);
+    const lOk = validateName(lastName);
+    setFirstNameError(fOk ? "" : t("Укажите корректное имя (2–40 букв)", "Enter a valid first name (2–40 letters)"));
+    setLastNameError(lOk ? "" : t("Укажите корректную фамилию (2–40 букв)", "Enter a valid last name (2–40 letters)"));
+    const phoneOk = phoneError === "" && phone.trim().length > 0;
+    const showOk = !!show;
+    const timeOk = !!timeSlot;
+
+    if (!fOk || !lOk || !phoneOk || !showOk || !timeOk) {
+      return;
+    }
+
+    const payload = {
+      firstName,
+      lastName,
+      phone,
+      show,
+      timeSlot,
+      tickets,
+      extras,
+      total,
+    };
+    try {
+      if (typeof window !== "undefined") localStorage.setItem("bookingData", JSON.stringify(payload));
+    } catch {}
+
+    setSubmitting(true);
+    let bookingId: string | undefined;
+    try {
+      const res = await fetch("/api/booking/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        bookingId = data?.id ? String(data.id) : undefined;
+        try {
+          const current = JSON.parse(localStorage.getItem("bookingData") || "{}");
+          localStorage.setItem(
+            "bookingData",
+            JSON.stringify({
+              ...current,
+              bookingId: data.id,
+              total: typeof data.total === "number" ? data.total : total,
+            }),
+          );
+        } catch {}
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+
+    openBookingWhatsApp(
+      { ...payload, bookingId },
+      lang === "en" ? "en" : "ru",
+      { showTitleOverride: getShowLabel(show) },
+    );
+  };
+
+  const inputBase = isPorsche
+    ? "w-full h-12 px-4 rounded-md placeholder-transparent border-2 focus:outline-none focus:ring-0 transition-colors p-input"
+    : "w-full h-12 px-4 rounded-xl bg-white/10 dark:bg-white/5 text-white/90 placeholder-white/40 border border-white/15 focus:outline-none focus:ring-2 focus:ring-indigo-400/60 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]";
+  const labelText = isPorsche ? "hidden" : "mb-2 block text-sm font-medium text-white/80";
+  const sectionTitle = isPorsche ? "hidden" : "mb-2 block text-sm font-medium text-white/80";
+  const radioButtonWrap = isPorsche
+    ? (active: boolean) => `group relative rounded-md border px-4 py-3 text-left transition-all ${active ? "border-black" : "border-gray-300 hover:border-black"}`
+    : (active: boolean) => `group relative rounded-2xl border px-4 py-3 text-left transition-all backdrop-blur-md ${active ? "border-indigo-400/60 bg-indigo-400/10 shadow-[0_0_0_1px_rgba(99,102,241,0.35),0_8px_30px_rgba(80,90,255,0.25)]" : "border-white/12 bg-white/6 hover:border-white/25"} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent`;
+  const textMain = isPorsche ? "text-black dark:text-white" : "text-white/90";
+  const textSub = isPorsche ? "text-[12px] text-black/60" : "text-[12px] text-white/60";
+  const submitBtn = isPorsche
+    ? "relative inline-flex items-center justify-center h-12 w-full px-6 rounded-md font-semibold disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none p-submit"
+    : "relative inline-flex items-center justify-center h-12 px-8 rounded-2xl text-white font-semibold disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none ctaPremium focus-visible:ring-2 focus-visible:ring-indigo-300/80 focus-visible:ring-offset-2";
 
   // (день недели больше не используется)
 
@@ -776,7 +780,7 @@ export default function BookingForm({ variant = "dark", initialLang, showTitles,
                   className={`${inputBase} p-input flex items-center justify-between`}
                   aria-haspopup="listbox"
                   aria-expanded={showOpen}
-                  onClick={() => { setShowTouched(true); setShowOpen((v) => !v); setPayOpen(false); }}
+                  onClick={() => { setShowTouched(true); setShowOpen((v) => !v); }}
                 >
                   <span className="truncate text-left">{show ? getShowLabel(show) : ''}</span>
                   <span aria-hidden className="ml-2 inline-block rotate-0 transition-transform peer-data-[open=true]:rotate-180">▾</span>
@@ -845,7 +849,7 @@ export default function BookingForm({ variant = "dark", initialLang, showTitles,
                     aria-expanded={ticketsOpen}
                     aria-disabled={!show}
                     disabled={!show}
-                    onClick={() => { if (show) { setTicketsOpen(v=>!v); setExtrasOpen(false); setShowOpen(false); setPayOpen(false); } }}
+                    onClick={() => { if (show) { setTicketsOpen(v=>!v); setExtrasOpen(false); setShowOpen(false); } }}
                   >
                     <span className="truncate text-left">{ticketsSummary}</span>
                     <span aria-hidden className="ml-2 inline-block">▾</span>
@@ -910,70 +914,6 @@ export default function BookingForm({ variant = "dark", initialLang, showTitles,
             <span className={"bookingTotal font-semibold text-lg tabular-nums"}>{fmt(total)}</span>
           </div>
 
-          {/* Payment selection */}
-          {isPorsche ? (
-            <div className={`p-field ${(payOpen || pay || savedSnapshot.pay) ? 'filled' : ''}`}>
-              <div className="p-wrap">
-                <span className="p-label">{t("Способ оплаты", "Payment method")}</span>
-                <button
-                  type="button"
-                  className={`${inputBase} p-input flex items-center justify-between`}
-                  aria-haspopup="listbox"
-                  aria-expanded={payOpen}
-                  onClick={() => { setPayTouched(true); setPayOpen((v) => !v); setShowOpen(false); }}
-                >
-                  <span className="truncate text-left">
-                    {pay === 'card' ? t('Банковской картой','Card') : pay === 'other' ? t('Другие способы','Other methods') : ''}
-                  </span>
-                  <span aria-hidden className="ml-2 inline-block">▾</span>
-                </button>
-              </div>
-              {payOpen && (
-                <ul role="listbox" className="p-dropdown absolute z-30 top-full left-0 right-0 mt-2 w-full rounded-md border shadow-lg overflow-hidden">
-                  {[
-                    { id: 'card', label: t('Банковской картой','Card') },
-                    { id: 'other', label: t('Другие способы','Other methods') },
-                  ].map((opt) => (
-                    <li
-                      key={opt.id}
-                      role="option"
-                      aria-selected={pay === opt.id}
-                      onClick={() => { setPay(opt.id); setPayTouched(true); setPayOpen(false); }}
-                      className={`px-3 py-2 cursor-pointer p-dropdown-item ${pay===opt.id ? 'selected' : ''}`}
-                    >
-                      {opt.label}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ) : (
-            <div className="block" aria-label={t("Способ оплаты", "Payment method")}>
-              <span className={sectionTitle}>{t("Способ оплаты", "Payment method")}</span>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[
-                  { id: "card", label: t("Банковская карта", "Card") },
-                  { id: "apple", label: t("Apple Pay", "Apple Pay") },
-                  { id: "google", label: t("Google Pay", "Google Pay") },
-                ].map((m) => (
-                  <label key={m.id} className={payOptionWrap(pay === m.id)}>
-                    <input
-                      className="accent-indigo-500"
-                      type="radio"
-                      name="pay"
-                      value={m.id}
-                      checked={pay === m.id}
-                      onChange={() => setPay(m.id)}
-                    />
-                    <span className={`inline-flex items-center gap-2 ${textMain}`}>
-                      <span className="font-medium">{m.label}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-
           <label className="flex items-start gap-3">
             <input className={`${isPorsche ? "p-accent" : ""} mt-[4px]`} type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
             <span className={isPorsche ? "text-sm" : "text-sm text-white/70"} style={isPorsche ? { color: "var(--p-muted)" } : undefined}>
@@ -989,15 +929,20 @@ export default function BookingForm({ variant = "dark", initialLang, showTitles,
           </label>
 
           <div className="pt-2">
-            <button
+            <GlassPanelShell
+              as="button"
               type="submit"
-              disabled={!agreed || !!phoneError || !!firstNameError || !!lastNameError || !firstName || !lastName || !show || !pay || !timeSlot || total === 0}
+              disabled={submitting || !agreed || !!phoneError || !!firstNameError || !!lastNameError || !firstName || !lastName || !show || !timeSlot || total === 0}
               className={submitBtn}
             >
-              <span className="relative z-10">{t("Перейти к оплате", "Proceed to payment")}</span>
+              <span className="relative z-10">
+                {submitting
+                  ? t("Открываем WhatsApp…", "Opening WhatsApp…")
+                  : t("Забронировать в WhatsApp", "Book via WhatsApp")}
+              </span>
               {!isPorsche && <span aria-hidden className="absolute -inset-2 rounded-3xl bg-gradient-to-r from-violet-500/25 via-indigo-500/25 to-sky-400/25 blur-2xl" />}
               {!isPorsche && <span aria-hidden className="shine" />}
-            </button>
+            </GlassPanelShell>
           </div>
         </form>
 

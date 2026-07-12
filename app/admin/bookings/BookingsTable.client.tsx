@@ -20,8 +20,9 @@ type Booking = {
 
 const TICKET_LABELS: Record<string, Record<string, string>> = {
   upi: {
-    upi_child_combo: "Детский (1 ребенок + 1 родитель)",
-    upi_adult: "Взрослый",
+    upi_adult: "Взрослый билет",
+    upi_adult_pair: "2 взрослых (2‑й родитель в подарок)",
+    upi_child_combo: "2 взрослых (акция)",
   },
   cinema: {
     cinema_child: "Детский",

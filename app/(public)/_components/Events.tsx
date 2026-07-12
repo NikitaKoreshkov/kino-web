@@ -1,7 +1,14 @@
 "use client";
 
-import React, { useMemo, useCallback } from "react";
+import React, { useEffect, useMemo } from "react";
 import { useLang, type Lang } from "../../lang";
+import {
+  scrollAboutToWhenReady,
+  takeHomeScrollTarget,
+} from "../_lib/aboutScroll";
+import { HeroLavaLetters } from "./HeroLavaLetters";
+import GlassPanelShell from "./GlassPanelShell";
+import MediaPlaceholder from "./MediaPlaceholder";
 
 export type EventCard = {
   id: 'master' | 'upi' | 'cinema';
@@ -21,9 +28,9 @@ export default function Events({ initial, items }: { initial?: Lang; items?: Arr
       const order: EventCard['id'][] = ['master', 'upi', 'cinema'];
       const cards = order.map((id, i) => {
         const it = items[i] || {};
-        const title = (it.title || (id === 'master' ? t('Мастер-класс', 'Master class') : id === 'upi' ? t('Фестиваль ЮПИ шоу', 'UPI Festival show') : t('Кино и Шоу', 'Cinema & Show')));
-        const desc = (it.description || (id === 'master' ? t('Формат: творческие занятия / обучение', 'Format: creative workshop / training') : id === 'upi' ? t('Формат: дневное шоу с красками и пеной', 'Format: day show with colors and foam') : t('Формат: вечерний показ фильмов + развлекательная программа', 'Format: evening films + entertainment program')));
-        const time = it.time || undefined;
+        const title = (it.title || (id === 'master' ? t('Кулинарный мастер-класс', 'Culinary master class') : id === 'upi' ? t('Семейное пенное шоу', 'Family foam show') : t('Кино и шоу под звёздами', 'Cinema & show under the stars')));
+        const desc = (it.description || (id === 'master' ? t('Каждый день в 10:00 и 11:00', 'Every day at 10:00 and 11:00') : id === 'upi' ? t('Краски и пена, тропический дождь, мячи‑гиганты, ростовые куклы, ведущий и DJ. Сладкая вата в подарок.', 'Paint and foam, tropical rain, giant balls, mascots, host and DJ. Cotton candy as a gift.') : t('Большой экран, звук Dolby Atmos. 20:00, 22:00, 00:00. Попкорн в подарок.', 'Big screen, Dolby Atmos sound. 20:00, 22:00, 00:00. Complimentary popcorn.')));
+        const time = it.time || (id === 'master' ? '10:00, 11:00' : id === 'upi' ? '17:00' : '20:00, 22:00, 00:00');
         const image = it.image || undefined;
         const href = id === 'master' ? '/booking?show=master' : id === 'upi' ? '/booking?show=upi' : '/booking?show=cinema';
         return { id, title, desc, time, image, primaryCta: { label: t('Купить билет', 'Buy ticket'), href } };
@@ -33,38 +40,50 @@ export default function Events({ initial, items }: { initial?: Lang; items?: Arr
     return [
       {
         id: 'master',
-        title: t('Мастер-класс', 'Master class'),
-        time: '10:00 – 12:00',
-        desc: t('Формат: творческие занятия / обучение', 'Format: creative workshop / training'),
-        image: 'https://images.unsplash.com/photo-1496307042754-b4aa456c4a2d?q=80&w=1800&auto=format&fit=crop',
+        title: t('Кулинарный мастер-класс', 'Culinary master class'),
+        time: '10:00, 11:00',
+        desc: t('Каждый день в 10:00 и 11:00', 'Every day at 10:00 and 11:00'),
+        image: undefined,
         primaryCta: { label: t('Купить билет', 'Buy ticket'), href: '/booking?show=master' },
       },
       {
         id: 'upi',
-        title: t('Фестиваль ЮПИ шоу', 'UPI Festival show'),
-        time: '17:00 – 19:00',
-        desc: t('Формат: дневное шоу с красками и пеной', 'Format: day show with colors and foam'),
-        image: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=1800&auto=format&fit=crop',
+        title: t('Семейное пенное шоу', 'Family foam show'),
+        time: '17:00',
+        desc: t(
+          'Краски и пена, тропический дождь, мячи‑гиганты, ростовые куклы, ведущий и DJ. Сладкая вата в подарок.',
+          'Paint and foam, tropical rain, giant balls, mascots, host and DJ. Cotton candy as a gift.',
+        ),
+        image: undefined,
         primaryCta: { label: t('Купить билет', 'Buy ticket'), href: '/booking?show=upi' },
       },
       {
         id: 'cinema',
-        title: t('Кино и Шоу', 'Cinema & Show'),
-        time: '20:00 – 02:00',
-        desc: t('Формат: вечерний показ фильмов + развлекательная программа', 'Format: evening films + entertainment program'),
-        image: 'https://images.unsplash.com/photo-1524985069026-dd778a71c7b4?q=80&w=1800&auto=format&fit=crop',
+        title: t('Кино и шоу под звёздами', 'Cinema & show under the stars'),
+        time: '20:00, 22:00, 00:00',
+        desc: t('Большой экран, звук Dolby Atmos. Попкорн в подарок.', 'Big screen, Dolby Atmos sound. Complimentary popcorn.'),
+        image: undefined,
         primaryCta: { label: t('Купить билет', 'Buy ticket'), href: '/booking?show=cinema' },
       },
     ];
   }, [lang, items]);
 
-  const onCtaMove = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
-    const t = e.currentTarget;
-    const r = t.getBoundingClientRect();
-    const x = e.clientX - r.left;
-    const y = e.clientY - r.top;
-    t.style.setProperty('--mx', `${x}px`);
-    t.style.setProperty('--my', `${y}px`);
+  // After /about → /#events, Next lands on the hero; scroll once #events is ready
+  useEffect(() => {
+    const stashed = takeHomeScrollTarget();
+    const hashId =
+      typeof window !== "undefined"
+        ? decodeURIComponent(window.location.hash.replace(/^#/, ""))
+        : "";
+    const id = stashed || hashId || null;
+    if (!id) return;
+    if (stashed && hashId !== stashed) {
+      window.history.replaceState(null, "", `/#${stashed}`);
+    }
+    return scrollAboutToWhenReady(id, {
+      behavior: "auto",
+      attempts: [0, 40, 120, 280, 560, 1000],
+    });
   }, []);
 
   return (
@@ -72,8 +91,16 @@ export default function Events({ initial, items }: { initial?: Lang; items?: Arr
       {/* Title above cards */}
       <section id="events" className="peekSection peekSectionBottom peekEvents" aria-labelledby="peek-title">
         <div className="peekWrap">
-          <h2 id="peek-title">{lang === 'ru' ? 'Ближайшие события' : 'Upcoming events'}</h2>
-          <h3>{lang === 'ru' ? 'Каждый день — новые впечатления' : 'New impressions every day'}</h3>
+          <div className="title headline">
+            <HeroLavaLetters variant="headlinePp" id="peek-title">
+              {lang === 'ru' ? 'Ближайшие события' : 'Upcoming events'}
+            </HeroLavaLetters>
+          </div>
+          <div className="subcopy">
+            <HeroLavaLetters variant="body">
+              {lang === 'ru' ? 'Каждый день новые впечатления' : 'New impressions every day'}
+            </HeroLavaLetters>
+          </div>
         </div>
       </section>
 
@@ -82,10 +109,12 @@ export default function Events({ initial, items }: { initial?: Lang; items?: Arr
         <div className="eventsWrap">
           <div className="grid">
             {events.map((ev) => (
-              <article
+              <GlassPanelShell
+                as="article"
                 key={ev.id}
                 id={ev.id === 'master' ? 'event-master-info' : ev.id === 'upi' ? 'event-upi-info' : 'event-cinema-info'}
                 className="card"
+                disabled
               >
                 <a
                   href={ev.id === 'master' ? '/shows/master' : ev.id === 'upi' ? '/shows/yupi' : '/shows/cinema'}
@@ -93,7 +122,7 @@ export default function Events({ initial, items }: { initial?: Lang; items?: Arr
                   className="cardOverlay"
                 />
                 <div className={`imagePanel${!ev.image ? ' noImg' : ''}`}>
-                  {ev.image && (
+                  {ev.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       className="imgBg"
@@ -108,6 +137,8 @@ export default function Events({ initial, items }: { initial?: Lang; items?: Arr
                         img.parentElement?.classList.add('noImg');
                       }}
                     />
+                  ) : (
+                    <MediaPlaceholder className="eventsMediaPlaceholder" lang={lang} />
                   )}
                   <div className="imageGlass" />
                   <div className="imageCaptionBottom">
@@ -122,17 +153,35 @@ export default function Events({ initial, items }: { initial?: Lang; items?: Arr
                     </div>
                   </div>
                 </div>
-                <h3 className="cardTitle" title={ev.title}>{ev.title}</h3>
-                <p className="desc">{ev.desc}</p>
-                <div className="ctaRow">
-                  <a className="ctaBtn" onMouseMove={onCtaMove} href={ev.primaryCta.href} aria-label={`${ev.primaryCta.label} — ${ev.title}`}>
-                    {ev.primaryCta.label}
-                  </a>
-                  <a className="ctaBtn secondary" onMouseMove={onCtaMove} href={ev.id === 'master' ? '/shows/master' : ev.id === 'upi' ? '/shows/yupi' : '/shows/cinema'} aria-label={(lang === 'ru' ? 'Подробнее о ' : 'Learn more about ') + ev.title}>
-                    {lang === 'ru' ? 'Подробнее' : 'Learn more'}
-                  </a>
+                <div className="title headline">
+                  <HeroLavaLetters variant="headlinePp" as="h3">
+                    {ev.title}
+                  </HeroLavaLetters>
                 </div>
-              </article>
+                <div className="subcopy">
+                  <HeroLavaLetters variant="body">
+                    {ev.desc}
+                  </HeroLavaLetters>
+                </div>
+                <div className="ctaRow">
+                  <GlassPanelShell
+                    as="a"
+                    className="ctaBtn"
+                    href={ev.primaryCta.href}
+                    aria-label={`${ev.primaryCta.label} — ${ev.title}`}
+                  >
+                    {ev.primaryCta.label}
+                  </GlassPanelShell>
+                  <GlassPanelShell
+                    as="a"
+                    className="ctaBtn secondary"
+                    href={ev.id === 'master' ? '/shows/master' : ev.id === 'upi' ? '/shows/yupi' : '/shows/cinema'}
+                    aria-label={(lang === 'ru' ? 'Подробнее о ' : 'Learn more about ') + ev.title}
+                  >
+                    {lang === 'ru' ? 'Подробнее' : 'Learn more'}
+                  </GlassPanelShell>
+                </div>
+              </GlassPanelShell>
             ))}
           </div>
         </div>

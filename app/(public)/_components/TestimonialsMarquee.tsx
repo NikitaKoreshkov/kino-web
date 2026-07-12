@@ -3,6 +3,8 @@
 import React, { useMemo, useState } from "react";
 import CenterSwipeTestimonials from "./CenterSwipeTestimonials";
 import { useLang, type Lang } from "../../lang";
+import { HeroLavaLetters } from "./HeroLavaLetters";
+import GlassPanelShell from "./GlassPanelShell";
 
 type Testimonial = {
   quote: string;
@@ -81,22 +83,42 @@ function Initials({ name }: { name: string }) {
   );
 }
 
-function Card({ t, onHover, active }: { t: Testimonial; onHover: (v: boolean) => void; active: boolean }) {
+function Card({
+  t,
+  onHover,
+  active,
+}: {
+  t: Testimonial;
+  onHover: (v: boolean) => void;
+  active: boolean;
+}) {
   return (
-    <article
-      className={`tmCard ${active ? "isHover" : ""}`}
+    <GlassPanelShell
+      as="article"
+      className={`tmCard${active ? " isHover" : ""}`}
+      disabled
+      elasticity={0}
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
     >
+      <span className="tmMark" aria-hidden>
+        “
+      </span>
       <p className="tmQuote">{t.quote}</p>
-      <div className="tmPerson">
-        {t.avatar ? <img className="tmAvatarImg" src={t.avatar} alt={t.name} /> : <Initials name={t.name} />}
-        <div className="tmMeta">
-          <strong>{t.name}</strong>
-          {t.title && <span>{t.title}</span>}
+      <div className="tmFoot">
+        <div className="tmPerson">
+          {t.avatar ? (
+            <img className="tmAvatarImg" src={t.avatar} alt={t.name} />
+          ) : (
+            <Initials name={t.name} />
+          )}
+          <div className="tmMeta">
+            <strong>{t.name}</strong>
+            {t.title && <span>{t.title}</span>}
+          </div>
         </div>
       </div>
-    </article>
+    </GlassPanelShell>
   );
 }
 
@@ -125,8 +147,8 @@ function Column({ items, speed = 40, dimmed = false }: { items: Testimonial[]; s
               setPaused(v);
               setHoveredIndex(v ? i % items.length : null);
             }}
-          />)
-        )}
+          />
+        ))}
       </div>
     </div>
   );
@@ -140,8 +162,18 @@ export default function TestimonialsMarquee({ initial }: { initial?: Lang }) {
   return (
     <section className="tmSection">
       <div className="tmWrap">
-        <h2 className="tmTitle">{lang === 'ru' ? 'Здесь отдыхают' : 'Where people unwind'}</h2>
-        <h3 className="tmSub">{lang === 'ru' ? 'Отзывы гостей о месте, куда возвращаются.' : 'Guest reviews of a place they return to.'}</h3>
+        <div className="title headline">
+          <HeroLavaLetters variant="headlinePp">
+            {lang === "ru" ? "Здесь отдыхают" : "Where people unwind"}
+          </HeroLavaLetters>
+        </div>
+        <div className="subcopy">
+          <HeroLavaLetters variant="body">
+            {lang === "ru"
+              ? "Отзывы гостей о месте, куда возвращаются"
+              : "Guest reviews of a place they return to"}
+          </HeroLavaLetters>
+        </div>
       </div>
 
       {/* Mobile: centered swipe gallery */}

@@ -1,11 +1,21 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
-import { createWriteStream, existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { randomUUID } from "crypto";
 import path from "path";
+import sharp from "sharp";
 
-export const runtime = "nodejs"; // ensure Node fs available
+export const runtime = "nodejs";
+
+const MAX_INPUT_BYTES = 40 * 1024 * 1024; // 40 MB raw upload
+const MAX_EDGE = 2560;
+
+function isImageMime(mime?: string, ext?: string) {
+  if (mime?.startsWith("image/")) return true;
+  const e = (ext || "").toLowerCase();
+  return [".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".tif", ".tiff", ".heic", ".heif"].includes(e);
+}
 
 export async function POST(req: Request) {
   try {
@@ -20,34 +30,58 @@ export async function POST(req: Request) {
     }
 
     const arrayBuffer = await file.arrayBuffer();
+    if (arrayBuffer.byteLength > MAX_INPUT_BYTES) {
+      return NextResponse.json({ error: "File too large (max 40MB)" }, { status: 413 });
+    }
+
     const buffer = Buffer.from(arrayBuffer);
     const uploadsDir = path.join(process.cwd(), "public", "uploads");
     if (!existsSync(uploadsDir)) mkdirSync(uploadsDir, { recursive: true });
 
-    // Try to detect extension from original name or mime type
-    // @ts-ignore name may exist on File only
     const originalName = (file as any)?.name as string | undefined;
     let ext = originalName ? path.extname(originalName) : "";
-    if (!ext) {
-      // @ts-ignore type may exist on Blob/File
-      const mime: string | undefined = (file as any)?.type;
-      if (mime) {
-        const guess = mime.split("/")[1];
-        if (guess) ext = `.${guess}`;
-      }
+    const mime: string | undefined = (file as any)?.type;
+    if (!ext && mime) {
+      const guess = mime.split("/")[1];
+      if (guess) ext = `.${guess}`;
     }
-    const name = `${randomUUID()}${ext}`;
-    const fullPath = path.join(uploadsDir, name);
 
-    await new Promise<void>((resolve, reject) => {
-      const stream = createWriteStream(fullPath);
-      stream.on("error", reject);
-      stream.on("finish", resolve);
-      stream.end(buffer);
+    let outName: string;
+    let outBuf: Buffer;
+
+    if (isImageMime(mime, ext)) {
+      // Optimize any size: auto-orient, max edge, WebP (keeps animated GIFs as-is)
+      const lower = (ext || "").toLowerCase();
+      if (lower === ".gif") {
+        outName = `${randomUUID()}.gif`;
+        outBuf = buffer;
+      } else {
+        outBuf = await sharp(buffer, { failOn: "none" })
+          .rotate()
+          .resize({
+            width: MAX_EDGE,
+            height: MAX_EDGE,
+            fit: "inside",
+            withoutEnlargement: true,
+          })
+          .webp({ quality: 82, effort: 4 })
+          .toBuffer();
+        outName = `${randomUUID()}.webp`;
+      }
+    } else {
+      // Non-images (e.g. video) stored as uploaded
+      outName = `${randomUUID()}${ext || ""}`;
+      outBuf = buffer;
+    }
+
+    const fullPath = path.join(uploadsDir, outName);
+    writeFileSync(fullPath, outBuf);
+
+    return NextResponse.json({
+      ok: true,
+      url: `/uploads/${outName}`,
+      bytes: outBuf.length,
     });
-
-    const url = `/uploads/${name}`;
-    return NextResponse.json({ ok: true, url });
   } catch (e: any) {
     console.error("/api/admin/upload error:", e);
     return NextResponse.json({ error: e?.message || "Internal error" }, { status: 500 });

@@ -1,9 +1,21 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, JetBrains_Mono, Unbounded } from "next/font/google";
 import { cookies, headers } from "next/headers";
 import Script from "next/script";
 import "./globals.css";
 import LangRefresher from "@/app/LangRefresher.client";
+import JsonLd from "@/app/_components/JsonLd";
+import GoogleAnalytics from "@/app/_components/GoogleAnalytics";
+import YandexMetrika from "@/app/_components/YandexMetrika";
+import {
+  DEFAULT_DESCRIPTION_RU,
+  DEFAULT_OG_IMAGE,
+  SITE_NAME,
+  SITE_ORIGIN,
+  faqJsonLd,
+  organizationJsonLd,
+  websiteJsonLd,
+} from "@/lib/seo";
 // ThemeToggle removed: admin runs in enforced dark theme
 
 const geistSans = Geist({
@@ -16,42 +28,91 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const unbounded = Unbounded({
+  subsets: ["latin", "cyrillic"],
+  weight: ["900"],
+  variable: "--font-unbounded",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin", "cyrillic"],
+  weight: ["400", "500"],
+  variable: "--font-jetbrains",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://example.com"),
+  metadataBase: new URL(SITE_ORIGIN),
   title: {
-    default: "Every moment — Event Agency",
-    template: "%s | Every moment",
+    default: "ШоуСочи — пенное шоу, кино и мастер-классы в Сочи",
+    template: `%s | ${SITE_NAME}`,
   },
-  description: "Premium event experiences. Book unforgettable moments with our agency.",
+  description: DEFAULT_DESCRIPTION_RU,
+  keywords: [
+    "ШоуСочи",
+    "Show Sochi",
+    "пенное шоу Сочи",
+    "кино под звёздами Сочи",
+    "амфитеатр Южное взморье",
+    "мастер-класс Сочи",
+    "фестиваль красок Сочи",
+    "открытый кинотеатр Сочи",
+    "развлечения Сочи Адлер",
+  ],
+  applicationName: SITE_NAME,
+  category: "entertainment",
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  formatDetection: { telephone: true, address: true, email: false },
   openGraph: {
     type: "website",
-    url: "https://example.com",
-    title: "Every moment — Event Agency",
-    description: "Premium event experiences. Book unforgettable moments with our agency.",
-    siteName: "Every moment",
+    url: SITE_ORIGIN,
+    title: "ШоуСочи — пенное шоу, кино и мастер-классы в Сочи",
+    description: DEFAULT_DESCRIPTION_RU,
+    siteName: SITE_NAME,
+    locale: "ru_RU",
+    alternateLocale: ["en_US"],
     images: [
       {
-        url: "/og.png",
-        width: 1200,
-        height: 630,
-        alt: "Every moment — Event Agency",
+        url: DEFAULT_OG_IMAGE,
+        width: 512,
+        height: 512,
+        alt: "ШоуСочи — амфитеатр на Южном взморье",
       },
     ],
-    locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Every moment — Event Agency",
-    description: "Premium event experiences. Book unforgettable moments with our agency.",
-    images: ["/og.png"],
+    title: "ШоуСочи — пенное шоу, кино и мастер-классы в Сочи",
+    description: DEFAULT_DESCRIPTION_RU,
+    images: [DEFAULT_OG_IMAGE],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
   },
   icons: {
     icon: [
       { url: "/favicon.ico" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [
-      { url: "/apple-touch-icon.png", sizes: "180x180" },
-    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  manifest: "/site.webmanifest",
+  other: {
+    "geo.region": "RU-KDA",
+    "geo.placename": "Sochi",
+    "geo.position": "43.427962;39.912852",
+    ICBM: "43.427962, 39.912852",
   },
 };
 
@@ -72,6 +133,7 @@ export default async function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="google" content="notranslate" />
+        <JsonLd data={[organizationJsonLd(), websiteJsonLd(), faqJsonLd()]} />
         {nonce ? (
           <Script id="boot-theme-scroll" nonce={nonce} strategy="beforeInteractive" suppressHydrationWarning>{`
 (function(){
@@ -204,9 +266,11 @@ export default async function RootLayout({
           `}</Script>
         )}
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} ${unbounded.variable} ${jetbrainsMono.variable} antialiased`}>
         {/* Client helper: refresh server components on language change without full reload */}
         <LangRefresher />
+        <YandexMetrika nonce={nonce} />
+        <GoogleAnalytics nonce={nonce} />
         {children}
       </body>
     </html>

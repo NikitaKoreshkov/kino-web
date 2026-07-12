@@ -1,20 +1,25 @@
 import Link from "next/link";
 import Image from "next/image";
 import { cookies } from "next/headers";
+import type { Metadata } from "next";
 import CheckoutPanel from "@/app/(public)/_components/CheckoutPanel";
 import { getSettingsMap, read } from "@/lib/settings";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = {
-  title: "Оплата | Every moment",
-};
+export const metadata: Metadata = buildPageMetadata({
+  title: "Подтверждение бронирования",
+  description: "Завершите бронирование билета в ШоуСочи через WhatsApp.",
+  path: "/booking/checkout",
+  noIndex: true,
+});
 
 export default async function CheckoutPage() {
   const cookieStore = await cookies();
   const cookieLang = cookieStore.get("lang")?.value;
   const initialLang = cookieLang === "en" ? "en" : "ru";
   const t = (ru: string, en: string) => (initialLang === "ru" ? ru : en);
-  // Read checkout cover (image) from settings: checkout.media.images.cover | checkout.media.cover
-  let coverSrc: string = "/images/cinema.svg";
+  // Cover only from DB settings
+  let coverSrc: string | undefined = undefined;
   try {
     const settings = await getSettingsMap();
     const media = read<any>(settings, "checkout.media", { images: {} });
@@ -29,14 +34,17 @@ export default async function CheckoutPage() {
         <div className="relative w-full min-h-[100vh] min-[500px]:flex">
           {/* Left image (hidden on <500, full-bleed from 500–1023, split at lg+) */}
           <div className="hidden min-[500px]:block relative flex-1 min-h-[40vh] lg:min-h-[100vh] min-[500px]:min-h-[100vh]">
-            <Image
-              src={coverSrc}
-              alt="Визуал шоу"
-              fill
-              priority
-              sizes="(min-width: 1024px) 60vw, 100vw"
-              className="object-cover"
-            />
+            {coverSrc ? (
+              <Image
+                src={coverSrc}
+                alt="Визуал шоу"
+                fill
+                priority
+                sizes="(min-width: 1024px) 60vw, 100vw"
+                className="object-cover"
+                unoptimized={coverSrc.startsWith("/uploads/")}
+              />
+            ) : null}
           </div>
 
           {/* Overlay wrapper (absolute) on <=1023; static right column on lg+ */}
@@ -50,7 +58,7 @@ export default async function CheckoutPage() {
                   </Link>
                 </div>
                 <p className="text-base md:text-lg font-medium pl-1 mb-6" style={{ color: 'color-mix(in oklab, var(--foreground) 70%, transparent)' }}>
-                  {t("Оплата бронирования", "Booking payment")}
+                  {t("Бронирование в WhatsApp", "Book via WhatsApp")}
                 </p>
 
                 <CheckoutPanel initialLang={initialLang} />
@@ -69,7 +77,7 @@ export default async function CheckoutPage() {
                   </Link>
                 </div>
                 <p className="text-base md:text-lg font-medium pl-1 mb-6" style={{ color: 'color-mix(in oklab, var(--foreground) 70%, transparent)' }}>
-                  {t("Оплата бронирования", "Booking payment")}
+                  {t("Бронирование в WhatsApp", "Book via WhatsApp")}
                 </p>
 
                 <CheckoutPanel initialLang={initialLang} />

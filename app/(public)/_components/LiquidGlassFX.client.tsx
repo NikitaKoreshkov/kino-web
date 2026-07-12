@@ -217,6 +217,7 @@ export default function LiquidGlassFX({ intensity = 0.75 }: { intensity?: number
           windowHeight: document.documentElement.clientHeight,
           useCORS: true,
           removeContainer: true,
+          ignoreElements: (el: Element) => el.tagName === "CANVAS",
         };
         if (!html2canvas) return; // no lib — skip
         const shot: HTMLCanvasElement = await html2canvas(document.body, opts);

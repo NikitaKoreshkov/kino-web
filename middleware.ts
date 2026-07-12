@@ -65,10 +65,7 @@ export async function middleware(req: NextRequest) {
   }
 
   // 2) Protect /admin/* routes (but allow /admin/login)
-  if (pathname.startsWith('/admin')) {
-    if (pathname.startsWith('/admin/login')) {
-      // continue
-    }
+  if (pathname.startsWith('/admin') && !pathname.startsWith('/admin/login')) {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) {
       const url = new URL("/admin/login", req.url);
@@ -84,9 +81,10 @@ export async function middleware(req: NextRequest) {
       "img-src 'self' https: data: blob:",
       "media-src 'self' https: data: blob:",
       "style-src 'self' 'unsafe-inline'",
-      `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-      `connect-src 'self' https:`,
-      "frame-src 'self' https:",
+      // strict-dynamic: nonce'd boot scripts may load GA/Metrika; hosts kept as fallback
+      `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://www.googletagmanager.com https://www.google-analytics.com https://mc.yandex.ru https://yandex.ru`,
+      "connect-src 'self' https: wss: https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.ru wss://mc.yandex.com",
+      "frame-src 'self' https: https://mc.yandex.ru",
       "child-src 'self' https:",
       "frame-ancestors 'self'",
     ].join('; ');

@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import GlassPanelShell from "./GlassPanelShell";
+import MediaPlaceholder from "./MediaPlaceholder";
 
 type Props = {
   images: { src: string; alt?: string }[];
@@ -10,6 +12,9 @@ type Props = {
   speedSec?: number; // seconds per cycle
   reverse?: boolean; // direction of second row if needed
   pauseOnHover?: boolean;
+  className?: string;
+  /** Glass rim tiles (static, no elasticity) for premium marquees */
+  glass?: boolean;
 };
 
 /**
@@ -26,10 +31,12 @@ export default function PhotoMarquee({
   speedSec = 8,
   reverse = false,
   pauseOnHover = true,
+  className = "",
+  glass = false,
 }: Props) {
   // Fixed-size base window of 8 items, cycling source images if их меньше
   const windowSize = 8;
-  const source = images.length ? images : [];
+  const source = images.length ? images : Array.from({ length: windowSize }, () => ({ src: "", alt: "" }));
   const items = Array.from({ length: windowSize }, (_, i) => source[i % Math.max(1, source.length)]);
   // Duplicate for seamless loop A + A
   const loop = [...items, ...items];
@@ -145,15 +152,35 @@ export default function PhotoMarquee({
     };
 
     const onResize = () => recompute();
-    window.addEventListener('resize', onResize);
+    const onPointerOver = (e: PointerEvent) => {
+      const t = e.target as Element | null;
+      if (t?.closest?.(".pm-item")) paused = true;
+    };
+    const onPointerOut = (e: PointerEvent) => {
+      const rel = e.relatedTarget as Element | null;
+      // Unpause only when leaving this row entirely, or moving to a non-tile gap
+      if (!rel || !root.contains(rel)) {
+        paused = false;
+        return;
+      }
+      if (!rel.closest?.(".pm-item")) paused = false;
+    };
+    window.addEventListener("resize", onResize);
     if (pauseOnHover) {
-      root.addEventListener('mouseenter', () => { paused = true; });
-      root.addEventListener('mouseleave', () => { paused = false; });
+      root.addEventListener("pointerover", onPointerOver);
+      root.addEventListener("pointerout", onPointerOut);
     }
     recompute();
     last = performance.now();
     raf = requestAnimationFrame(tick);
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', onResize); };
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onResize);
+      if (pauseOnHover) {
+        root.removeEventListener("pointerover", onPointerOver);
+        root.removeEventListener("pointerout", onPointerOut);
+      }
+    };
   }, [jsMode, speedSec, reverse, pauseOnHover, reduceMotion, loop.length, items.length, gap]);
 
   // Swipe navigation (mobile): scroll by one tile width
@@ -203,7 +230,7 @@ export default function PhotoMarquee({
 
   return (
     <div
-      className={`pm-shell`}
+      className={`pm-shell${className ? ` ${className}` : ""}${glass ? " pm-glassShell" : ""}`}
       style={{
         // Всегда выставляем размеры через CSS-переменные, чтобы расчёты center-padding и snap были точными на мобильных
         // @ts-ignore custom props
@@ -224,7 +251,7 @@ export default function PhotoMarquee({
       ref={shellRef}
     >
       <div
-        className={`pm-container pm-run${pauseOnHover ? " hoverPause" : ""} ${jsMode ? 'jsMarquee' : ''} ${isMobile ? 'pm-swipe' : ''}`}
+        className={`pm-container pm-run${pauseOnHover && !glass ? " hoverPause" : ""} ${jsMode ? 'jsMarquee' : ''} ${isMobile ? 'pm-swipe' : ''}`}
         ref={scrollerRef}
       >
         <div className="pm-track" ref={trackRef} style={{ willChange: 'transform' }}>
@@ -242,26 +269,37 @@ export default function PhotoMarquee({
             isLeader = (i >= n - preloadCount && i < n) || (i >= 2 * n - preloadCount);
           }
           return (
-          <div key={i} className={`pm-item${isLeader ? ' preload' : ''}${ghost ? ' ghost' : ''}`} aria-hidden={ghost ? true : undefined}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={img.src}
-              alt={img.alt || ''}
-              loading={isLeader ? 'eager' : 'lazy'}
-              decoding="async"
-              width={Math.round(width)}
-              height={Math.round(height)}
-              fetchPriority={isLeader ? 'high' : 'auto'}
-            />
-          </div>
+          <GlassPanelShell
+            key={i}
+            className={`pm-item${glass ? " pm-glass" : ""}${isLeader ? " preload" : ""}${ghost ? " ghost" : ""}${img?.src ? "" : " loaded"}`}
+            disabled
+            aria-hidden={ghost ? true : undefined}
+          >
+            {img?.src ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={img.src}
+                  alt={img.alt || ''}
+                  loading={isLeader ? 'eager' : 'lazy'}
+                  decoding="async"
+                  width={Math.round(width)}
+                  height={Math.round(height)}
+                  fetchPriority={isLeader ? 'high' : 'auto'}
+                />
+              </>
+            ) : (
+              <MediaPlaceholder className="pm-placeholder" />
+            )}
+          </GlassPanelShell>
         );})}
         </div>
       </div>
       {/* Mobile arrows (overlay on shell) */}
       {isMobile && (
         <div className="pm-arrows">
-          <button className="pm-arrow pm-prev" aria-label={"Предыдущая"} onClick={() => scrollByTile(-1)} />
-          <button className="pm-arrow pm-next" aria-label={"Следующая"} onClick={() => scrollByTile(1)} />
+          <GlassPanelShell as="button" className="pm-arrow pm-prev" aria-label={"Предыдущая"} onClick={() => scrollByTile(-1)} />
+          <GlassPanelShell as="button" className="pm-arrow pm-next" aria-label={"Следующая"} onClick={() => scrollByTile(1)} />
         </div>
       )}
     </div>

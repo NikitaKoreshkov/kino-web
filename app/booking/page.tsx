@@ -2,20 +2,25 @@ import BookingForm from "@/app/(public)/_components/BookingForm";
 import ClientOnly from "@/app/(public)/_components/ClientOnly";
 import Link from "next/link";
 import { cookies } from "next/headers";
+import type { Metadata } from "next";
 import { getSettingsMap, read } from "@/lib/settings";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = {
-  title: "Бронирование | Every moment",
-  description: "Забронируйте участие в мероприятии — премиальный опыт покупки билетов.",
-};
+export const metadata: Metadata = buildPageMetadata({
+  title: "Бронирование билетов",
+  description:
+    "Забронируйте билеты в ШоуСочи онлайн: пенное шоу, кино под звёздами или кулинарный мастер-класс. Сочи, ул. Калинина, 1/1.",
+  path: "/booking",
+  keywords: ["купить билет ШоуСочи", "бронирование шоу Сочи", "билеты онлайн"],
+});
 
 export default async function BookingPage() {
   const cookieStore = await cookies();
   const cookieLang = cookieStore.get("lang")?.value;
   const initialLang = cookieLang === "en" ? "en" : "ru";
   const t = (ru: string, en: string) => (initialLang === "ru" ? ru : en);
-  // Read booking cover image from settings
-  let coverSrc: string = "/images/cinema.svg";
+  // Read booking cover image from settings (DB only — no local placeholders)
+  let coverSrc: string | undefined = undefined;
   let bookingShowTitles: { master?: string; upi?: string; cinema?: string } | undefined = undefined;
   let customTickets: Record<string, Array<{ id: string; label: string; note?: string; priceText: string; price: number }>> | undefined = undefined;
   try {
@@ -69,8 +74,10 @@ export default async function BookingPage() {
         <div className="relative tabletOnly min-h-[100vh] items-center justify-center hidden md:flex">
           {/* background image */}
           <div className="absolute inset-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={coverSrc} alt="Визуал шоу" className="w-full h-full object-cover" />
+            {coverSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={coverSrc} alt="Визуал шоу" className="w-full h-full object-cover" />
+            ) : null}
           </div>
           <div className="relative z-10 w-full max-w-[520px] px-4 sm:px-6">
             <div className="tabletCard mx-auto max-w-[460px] rounded-xl backdrop-blur-[2px] border shadow-[0_20px_60px_rgba(0,0,0,.28)]" style={{ background: 'var(--panel-bg)', borderColor: 'var(--panel-border)', color: 'var(--foreground)' }}>
@@ -89,8 +96,10 @@ export default async function BookingPage() {
         <div className="desktopOnly hidden w-full">
           {/* Left image */}
           <div className="relative flex-1 min-h-[40vh] lg:min-h-[100vh]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={coverSrc} alt="Визуал шоу" className="absolute inset-0 w-full h-full object-cover" />
+            {coverSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={coverSrc} alt="Визуал шоу" className="absolute inset-0 w-full h-full object-cover" />
+            ) : null}
           </div>
 
           {/* Right white panel */}

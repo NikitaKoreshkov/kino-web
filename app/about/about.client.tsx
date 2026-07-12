@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Header from "@/app/(public)/_components/Header";
 import { Marck_Script, Montserrat } from "next/font/google";
 import { useLang } from "@/app/lang";
@@ -11,6 +11,14 @@ import KinoShow from "@/app/(public)/_components/KinoShow";
 import MasterShow from "@/app/(public)/_components/MasterShow";
 import Extras from "@/app/(public)/_components/Extras";
 import Footer from "@/app/(public)/_components/Footer";
+import { HeroLavaLetters } from "@/app/(public)/_components/HeroLavaLetters";
+import GlassPanelShell from "@/app/(public)/_components/GlassPanelShell";
+import { useAboutReveal } from "@/app/(public)/_hooks/useAboutReveal";
+import {
+  scrollAboutTo,
+  scrollAboutToWhenReady,
+  takeAboutScrollTarget,
+} from "@/app/(public)/_lib/aboutScroll";
 
 const marck = Marck_Script({ subsets: ["latin", "cyrillic"], weight: "400", display: "swap" });
 const montserrat = Montserrat({ subsets: ["latin", "cyrillic"], weight: ["700", "800"], display: "swap" });
@@ -29,25 +37,9 @@ export default function AboutClient({ initialLang, introImage, blocks, extras }:
   const timeoutsRef = useRef<number[]>([]);
   const intervalRef = useRef<number | null>(null);
   const startHeroRef = useRef<() => void>(() => {});
+  const belowHeroRef = useRef<HTMLDivElement | null>(null);
 
-
-  // simple IntersectionObserver reveal
-  useEffect(() => {
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            e.target.classList.add("reveal-in");
-            io.unobserve(e.target);
-          }
-        }
-      },
-      { threshold: 0.15 }
-    );
-    const nodes = document.querySelectorAll<HTMLElement>(".reveal");
-    nodes.forEach((n) => io.observe(n));
-    return () => io.disconnect();
-  }, []);
+  useAboutReveal(belowHeroRef, [lang]);
 
   // Reveal photo on first scroll as an alternative trigger
   useEffect(() => {
@@ -70,24 +62,45 @@ export default function AboutClient({ initialLang, introImage, blocks, extras }:
 
 
   // handle initial hash scroll on route load and subsequent hash changes
-  useEffect(() => {
-    const scrollToHash = () => {
-      if (typeof window === 'undefined') return;
-      const hash = window.location.hash;
-      if (!hash) return;
-      const id = decodeURIComponent(hash.replace('#', ''));
-      const el = document.getElementById(id);
-      if (!el) return;
-      // wait a tick to ensure layout is ready
-      requestAnimationFrame(() => {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
+  useLayoutEffect(() => {
+    const stashed = takeAboutScrollTarget();
+    const hashId =
+      typeof window !== "undefined"
+        ? decodeURIComponent(window.location.hash.replace(/^#/, ""))
+        : "";
+    const id = stashed || hashId || null;
+    if (!id) return;
+
+    // Keep URL in sync when we arrived via stash (no native hash scroll)
+    if (stashed && hashId !== stashed) {
+      window.history.replaceState(null, "", `/about#${stashed}`);
+    }
+
+    if (id === "about") {
+      window.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+
+    // Instant land on deep-link entry — smooth-from-top + retries caused a visible jerk
+    const cancel = scrollAboutToWhenReady(id, {
+      behavior: "auto",
+      attempts: [0, 40, 120, 280, 560, 1000],
+    });
+
+    const onHash = () => {
+      const next = decodeURIComponent(window.location.hash.replace(/^#/, ""));
+      if (!next) return;
+      if (next === "about") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+      scrollAboutToWhenReady(next, { behavior: "smooth", attempts: [0, 80, 240] });
     };
-    // run on mount
-    scrollToHash();
-    // respond to in-page hash changes as well
-    window.addEventListener('hashchange', scrollToHash, { passive: true });
-    return () => window.removeEventListener('hashchange', scrollToHash);
+    window.addEventListener("hashchange", onHash);
+    return () => {
+      cancel();
+      window.removeEventListener("hashchange", onHash);
+    };
   }, []);
 
   const scheduleTimes = useMemo(() => t.about.scheduleTimes.split("\n"), [t]);
@@ -174,7 +187,7 @@ export default function AboutClient({ initialLang, introImage, blocks, extras }:
     return () => window.removeEventListener('pageshow', onPageShow as any);
   }, []);
 
-  // smooth anchor scroll if coming from same page
+  // smooth in-page #anchor clicks
   useEffect(() => {
     const onClick = (e: Event) => {
       const a = e.target as HTMLElement | null;
@@ -182,10 +195,10 @@ export default function AboutClient({ initialLang, introImage, blocks, extras }:
       const link = a.closest("a[href^='#']") as HTMLAnchorElement | null;
       if (!link) return;
       const id = link.getAttribute("href")!.slice(1);
-      const el = document.getElementById(id);
-      if (!el) return;
+      if (!id || !document.getElementById(id)) return;
       e.preventDefault();
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.history.pushState(null, "", `#${id}`);
+      scrollAboutTo(id, "smooth");
     };
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
@@ -195,8 +208,8 @@ export default function AboutClient({ initialLang, introImage, blocks, extras }:
     <>
       <Header ssrLang={initialLang} />
       <main className={`aboutPage relative`}>
-      {/* premium background */}
-      <div className="premiumBg" aria-hidden />
+      {/* soft page atmosphere — no purple glow */}
+      <div className="aboutBg" aria-hidden />
 
       {/* Hero — Nike-like sequential words */}
       <section id="about" className="heroSection">
@@ -218,122 +231,156 @@ export default function AboutClient({ initialLang, introImage, blocks, extras }:
         </div>
       </section>
 
-      {/* Company intro — Nike-like: big photo left, copy right */}
-      <section id="about-company" className="w-full max-w-none plWall py-6 lg:py-8 -mt-24 sm:-mt-28 lg:-mt-28 xl:-mt-24 2xl:-mt-24">
-        <div className="grid grid-cols-12 md:gap-8 lg:gap-10 items-start lg:items-center">
-          {/* Left: Media */}
-          <figure className={`col-span-12 md:col-start-1 md:col-end-10 overflow-hidden rounded-2xl aboutFigure ${showPhoto ? 'is-on' : 'is-off'}`} aria-hidden={!showPhoto}>
-            <img
-              src={introImage || "/images/cinema.svg"}
-              alt={t.about.mediaAlt}
-              className="block w-full h-full object-cover object-left"
-              loading="eager"
-              decoding="async"
-            />
-          </figure>
+      <div ref={belowHeroRef} className="aboutBelow">
+      {/* Company intro */}
+      <section id="about-company" className="abCompany abBand plWall">
+        <GlassPanelShell
+          as="figure"
+          className={`abCompany__media aboutFigure ${showPhoto ? "is-on" : "is-off"}`}
+          elasticity={0.2}
+          aria-hidden={!showPhoto}
+        >
+          <img
+            src={introImage || ""}
+            alt={t.about.mediaAlt}
+            loading="eager"
+            decoding="async"
+            style={{ display: introImage ? undefined : "none" }}
+          />
+        </GlassPanelShell>
 
-          {/* Right: Copy */}
-          <div className="col-span-12 md:col-start-10 md:col-end-13 md:pl-4 lg:pl-6 self-start lg:self-center reveal max-w-[520px]">
-            <h2 className={`${montserrat.className} aboutCompanyTitle text-2xl sm:text-3xl lg:text-4xl font-bold leading-[1.2] tracking-normal mb-3`}>{t.about.companyTitle}</h2>
-            <p className="aboutCompanyText text-base sm:text-lg leading-7 sm:leading-8 max-w-prose">{t.about.companyText}</p>
+        <div
+          className="abCompany__copy ab-reveal"
+          style={{ ["--ab-delay" as string]: "120ms" }}
+        >
+          <div className="title headline">
+            <HeroLavaLetters variant="headlinePp">{t.about.companyTitle}</HeroLavaLetters>
+          </div>
+          <div className="subcopy">
+            <HeroLavaLetters variant="body">{t.about.companyText}</HeroLavaLetters>
           </div>
         </div>
       </section>
 
-      {/* Features/Help/Events anchors will exist even if content comes later */}
-      <section id="features" className="w-full max-w-none plWall mt-12 sm:mt-16 lg:mt-24 pb-8">
-        <div className="grid md:grid-cols-3 gap-6">
-          {t.about.features.map((f) => (
-            <article key={f.title} className="card reveal premiumCard">
-              <div className="featureRow">
-                <span className="featIcon" aria-hidden>{
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-5 h-5">
-                    <path d="M7 11l3 3 7-7" strokeLinecap="round" strokeLinejoin="round"/>
-                    <rect x="3" y="4" width="18" height="16" rx="4"/>
-                  </svg>
-                }</span>
-                <div className="flex-1 flex flex-col">
-                  <h3 className={`${montserrat.className} text-lg sm:text-xl font-extrabold tracking-tight`}>{f.title}</h3>
-                  <p className="mt-2 text-[15px] sm:text-base opacity-85 leading-6 sm:leading-7">{f.text}</p>
-                  {/* badges and CTA intentionally not rendered */}
-                </div>
+      {/* Features */}
+      <section id="features" className="abFeatures abBand plWall">
+        <div className="abFeatures__list">
+          {t.about.features.map((f, i) => (
+            <article
+              key={f.title}
+              className="abFeatures__item ab-reveal"
+              style={{ ["--ab-delay" as string]: `${i * 90}ms` }}
+            >
+              <span className="abFeatures__index" aria-hidden>
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <div className="abFeatures__body">
+                <h3 className="abFeatures__title">{f.title}</h3>
+                <p className="abFeatures__text">{f.text}</p>
               </div>
             </article>
           ))}
         </div>
       </section>
 
-      
-
-      {/* Trust reasons with ScrollStory-like effect */}
       <TrustScroll />
 
-      {/* Yupi Show — premium section */}
       <YupiShow data={blocks?.upi as any} />
-
-      {/* Kino Show — mirrored layout */}
       <KinoShow data={blocks?.cinema as any} />
-
-      {/* Master Show — same layout as YupiShow */}
       <MasterShow data={blocks?.master as any} />
 
-      {/* Extra products */}
       <Extras data={extras} />
 
       {/* Schedule */}
-      <section id="schedule" className="schRoot w-full max-w-none plWall py-10">
-        <article className="card reveal schCard">
-          <h2 className="text-2xl font-semibold schTitle">{t.about.scheduleTitle}</h2>
-          <p className="mt-3 schLead">{t.about.scheduleEveryday}</p>
-          <div className="schGrid mt-4">
-            {t.about.weekdays.map((d, i) => {
-              const isToday = i === todayIdx;
-              return (
-              <div key={d} className={`schItem text-center ${isToday ? "is-today" : ""}`}>
-                <div className="schDay">{d}</div>
-                <div className="schTime">{scheduleTimes[0]}</div>
-                <div className="schTime">{scheduleTimes[1]}</div>
-              </div>
-            );})}
+      <section id="schedule" className="abSchedule abBand plWall">
+        <div className="abSchedule__inner ab-reveal">
+          <div className="abSchedule__head">
+            <div className="title headline">
+              <HeroLavaLetters variant="headlinePp">{t.about.scheduleTitle}</HeroLavaLetters>
+            </div>
+            <p className="abSchedule__everyday">{t.about.scheduleEveryday}</p>
           </div>
-        </article>
+
+          <div
+            className="abSchedule__slots ab-reveal"
+            style={{ ["--ab-delay" as string]: "100ms" }}
+          >
+            {scheduleTimes.map((time) => (
+              <div key={time} className="abSchedule__slot">
+                {time}
+              </div>
+            ))}
+          </div>
+
+          <div
+            className="abSchedule__days ab-reveal"
+            style={{ ["--ab-delay" as string]: "180ms" }}
+            aria-label={t.about.scheduleTitle}
+          >
+            {t.about.weekdays.map((d, i) => (
+              <span
+                key={d}
+                className={`abSchedule__day${i === todayIdx ? " is-today" : ""}`}
+              >
+                {d}
+              </span>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* Help / Contacts */}
-      <section id="help" className="w-full max-w-none plWall pt-2 pb-10">
-        <article className="card reveal premiumCard">
-          <h2 className={`${montserrat.className} text-2xl sm:text-3xl font-extrabold tracking-tight`}>{lang === 'ru' ? 'Нужна помощь?' : 'Need help?'}</h2>
-          <p className="mt-2 text-base sm:text-lg opacity-85 leading-7">
-            {lang === 'ru'
-              ? 'Мы всегда на связи. Подскажем по билетам, шоу и броням — быстро и с заботой.'
-              : 'We’re here for you. Questions about tickets, shows or bookings — fast and friendly support.'}
-          </p>
-          <div className="mt-4 flex flex-wrap gap-10 items-center">
-            <div className="flex flex-col gap-1">
-              <span className="text-sm opacity-70">{lang === 'ru' ? 'Телефон' : 'Phone'}</span>
-              <a href="tel:+79631630066" className="btnPrimary" aria-label={lang === 'ru' ? 'Позвонить +7 (963) 163-00-66' : 'Call +7 (963) 163-00-66'}>
+      <section id="help" className="abHelp abBand plWall">
+        <div className="abHelp__inner ab-reveal">
+          <div className="title headline">
+            <HeroLavaLetters variant="headlinePp">{t.about.helpTitle}</HeroLavaLetters>
+          </div>
+          <div className="subcopy">
+            <HeroLavaLetters variant="body">{t.about.helpText}</HeroLavaLetters>
+          </div>
+          <div
+            className="abHelp__contacts ab-reveal"
+            style={{ ["--ab-delay" as string]: "120ms" }}
+          >
+            <div className="abHelp__col">
+              <span className="abHelp__label">{t.about.helpAddressLabel}</span>
+              <a
+                href={t.about.helpMapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="abHelp__link"
+                aria-label={`${t.about.helpAddressLabel} ${t.about.helpAddress}`}
+              >
+                {t.about.helpAddress}
+              </a>
+            </div>
+            <div className="abHelp__col">
+              <span className="abHelp__label">{t.about.helpPhoneLabel}</span>
+              <a
+                href="tel:+79631630066"
+                className="abHelp__link"
+                aria-label={`${t.about.helpPhoneLabel} +7 (963) 163-00-66`}
+              >
                 +7 (963) 163‑00‑66
               </a>
             </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-sm opacity-70">WhatsApp</span>
+            <div className="abHelp__col">
+              <span className="abHelp__label">{t.about.helpWhatsappLabel}</span>
               <a
                 href="https://api.whatsapp.com/send/?phone=79631630066&text=%D0%97%D0%B4%D1%80%D0%B0%D0%B2%D1%81%D1%82%D0%B2%D1%83%D0%B9%D1%82%D0%B5%21+%D0%9F%D0%B8%D1%88%D1%83+%D1%81+%D1%81%D0%B0%D0%B9%D1%82%D0%B0%2C+%D0%BD%D1%83%D0%B6%D0%BD%D0%B0+%D0%BF%D0%BE%D0%BC%D0%BE%D1%89%D1%8C.&type=phone_number&app_absent=0"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="btnGhost"
-                aria-label={lang === 'ru' ? 'Написать в WhatsApp' : 'Message on WhatsApp'}
+                className="abHelp__link"
+                aria-label={t.about.helpWhatsappCta}
               >
-                {lang === 'ru' ? 'Написать в WhatsApp' : 'Message on WhatsApp'}
+                {t.about.helpWhatsappCta}
               </a>
             </div>
           </div>
-        </article>
+        </div>
       </section>
+      </div>
 
-      {/* Removed: Наши шоу */}
-
-      {/* Footer from homepage */}
       <Footer />
       </main>
     </>

@@ -9,14 +9,16 @@ export default async function ScrollPanelsSSR() {
   const mainPhotoObj = read<any>(settings, "home.panels.mainPhoto", { src: "" });
   const mainPhoto = typeof mainPhotoObj === 'string' ? mainPhotoObj : (mainPhotoObj?.src || "");
   const itemsRaw = read<any[]>(settings, "home.panels.items", []);
-  const items: PanelItem[] = (Array.isArray(itemsRaw) ? itemsRaw : []).slice(0, 6).map((it) => {
+  const raw = (Array.isArray(itemsRaw) ? itemsRaw : []).slice(0, 6);
+  const items: PanelItem[] = Array.from({ length: 6 }, (_, i) => {
+    const it = raw[i] || {};
     const title = lang === 'en' ? (it?.title_en || it?.title) : it?.title;
     const description = lang === 'en' ? (it?.description_en || it?.description) : it?.description;
     return {
       image: (it?.image || it?.src || "").toString(),
-      title: (title || "").toString(),
+      title: (title || (lang === "ru" ? `Панель ${i + 1}` : `Panel ${i + 1}`)).toString(),
       description: (description || "").toString(),
     };
-  }).filter(x => x.image);
+  });
   return <ScrollPanels mainPhoto={mainPhoto} items={items} />;
 }

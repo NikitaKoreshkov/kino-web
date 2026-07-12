@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import MediaPlaceholder from "./MediaPlaceholder";
 
 export type CenterSwipeGalleryProps = {
   images: { src: string; alt?: string }[];
@@ -170,7 +171,11 @@ export default function CenterSwipeGallery({
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img.src} alt={img.alt || ''} loading={i < 2 ? 'eager' : 'lazy'} decoding="async" />
+              {img.src ? (
+                <img src={img.src} alt={img.alt || ''} loading={i < 2 ? 'eager' : 'lazy'} decoding="async" />
+              ) : (
+                <MediaPlaceholder className="citemPlaceholder" />
+              )}
             </div>
           ))}
         </div>
